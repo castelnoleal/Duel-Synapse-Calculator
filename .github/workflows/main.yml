@@ -1,22 +1,18 @@
-name: Build Duel Synapse Calculator APK
+name: Build Duel Synapse Calculator
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Extract Android project
-        run: |
-          rm -rf app-build
-          mkdir app-build
-          unzip -q DuelSynapseCalculator-project.zip -d app-build
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -24,17 +20,107 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Create Android project
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p app/src/main/java/com/meiocg/duelsynapsecalculator
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/res/values
+
+          cp index.html app/src/main/assets/index.html
+          cp MainActivity.java app/src/main/java/com/meiocg/duelsynapsecalculator/MainActivity.java
+          cp AndroidManifest.xml app/src/main/AndroidManifest.xml
+          cp colors.xml app/src/main/res/values/colors.xml
+          cp strings.xml app/src/main/res/values/strings.xml
+          cp styles.xml app/src/main/res/values/styles.xml
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.meiocg.duelsynapsecalculator'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.meiocg.duelsynapsecalculator'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+
+              buildTypes {
+                  debug {
+                      applicationIdSuffix '.debug'
+                  }
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          EOF
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = 'Duel Synapse Calculator'
+          include ':app'
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          EOF
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Build debug APK
-        working-directory: app-build
+      - name: Build APK
         run: gradle --no-daemon assembleDebug
+
+      - name: Prepare APK
+        run: |
+          mkdir -p output
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             "output/Duel Synapse Calculator.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Duel-Synapse-Calculator-debug-apk
-          path: app-build/app/build/outputs/apk/debug/app-debug.apk
+          name: Duel-Synapse-Calculator-APK
+          path: "output/Duel Synapse Calculator.apk"
