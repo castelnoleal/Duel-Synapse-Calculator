@@ -11,3 +11,7 @@ Then open **Actions → Build Duel Synapse Calculator APK → Run workflow**.
 When the run finishes, open it and download the artifact **Duel-Synapse-Calculator-APK**. The artifact contains `Duel Synapse Calculator.apk`.
 
 The app bundles `app/src/main/assets/index.html`, so the Duel Synapse interface itself does not require an internet connection.
+
+
+## MEIOCG branding
+The official MEIOCG logo supplied for this build is used for the Android launcher icon and splash screen.

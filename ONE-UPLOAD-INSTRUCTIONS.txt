@@ -1,0 +1,23 @@
+DUEL SYNAPSE CALCULATOR — MEIOCG BRANDED
+
+PHONE-FRIENDLY UPDATE
+
+The folder DuelSynapseCalculator-APK-Ready is the COMPLETE Android project.
+It includes:
+- Your original Duel Synapse V1.0 HTML
+- The exact MEIOCG logo you supplied
+- MEIOCG launcher icon
+- MEIOCG splash screen
+- Android project files
+- GitHub Actions workflow
+
+If using GitHub from a phone, do NOT cherry-pick individual files.
+
+EASIEST METHOD:
+1. Extract this package on your phone.
+2. In GitHub, open Code -> Add file -> Upload files.
+3. Select ALL files/folders inside DuelSynapseCalculator-APK-Ready and upload them to the repository root, allowing replacement of existing files.
+4. Commit the changes.
+5. Open Actions and run Build Duel Synapse Calculator APK.
+
+If your GitHub mobile upload cannot select folders, use the ZIP itself only after updating your existing workflow to extract it. The ZIP cannot be unpacked automatically by GitHub's normal file uploader.

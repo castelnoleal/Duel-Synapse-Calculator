@@ -8,6 +8,12 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Window;
 import android.view.WindowManager;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.view.Gravity;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.os.Handler;
 import android.webkit.CookieManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -26,6 +32,9 @@ public class MainActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().setNavigationBarColor(0xFF07080C);
+
+        FrameLayout rootLayout = new FrameLayout(this);
+        rootLayout.setBackgroundColor(Color.BLACK);
 
         webView = new WebView(this);
         WebSettings s = webView.getSettings();
@@ -58,8 +67,30 @@ public class MainActivity extends Activity {
             }
         });
         webView.setBackgroundColor(0xFF07080C);
-        setContentView(webView);
+        rootLayout.addView(webView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+
+        ImageView splash = new ImageView(this);
+        splash.setImageResource(com.meiocg.duelsynapsecalculator.R.drawable.meiocg_logo);
+        splash.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        splash.setBackgroundColor(Color.BLACK);
+        FrameLayout.LayoutParams splashParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        );
+        splashParams.gravity = Gravity.CENTER;
+        rootLayout.addView(splash, splashParams);
+
+        setContentView(rootLayout);
         webView.loadUrl("file:///android_asset/index.html");
+
+        new Handler().postDelayed(() -> {
+            splash.animate().alpha(0f).setDuration(220).withEndAction(() -> {
+                rootLayout.removeView(splash);
+            }).start();
+        }, 850);
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
