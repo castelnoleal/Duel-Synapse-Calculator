@@ -1,0 +1,166 @@
+name: Sync YGOResources Q&A Database
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "13 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-ygoresources-qa
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout MEIOCG repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Clone current parent Q&A database
+        run: |
+          git clone --depth 1 --single-branch --branch main \
+            https://github.com/db-ygoresources-com/yugioh-qa-history.git \
+            /tmp/yugioh-qa-history
+
+      - name: Sync complete Q&A database
+        run: |
+          mkdir -p data/rulings/yugioh-qa-history
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            /tmp/yugioh-qa-history/ \
+            data/rulings/yugioh-qa-history/
+
+      - name: Build MEIOCG card-to-Q&A index
+        shell: python
+        run: |
+          import json
+          import re
+          from pathlib import Path
+
+          ROOT = Path("data/rulings/yugioh-qa-history")
+          OUT = Path("data/rulings/index")
+          OUT.mkdir(parents=True, exist_ok=True)
+
+          card_to_qa = {}
+          qa_to_cards = {}
+          qa_count = 0
+
+          def add(card_id, qa_id):
+              if card_id is None:
+                  return
+              cid = str(card_id).strip()
+              if not cid.isdigit() or len(cid) < 4 or len(cid) > 12:
+                  return
+              card_to_qa.setdefault(cid, []).append(str(qa_id))
+              qa_to_cards.setdefault(str(qa_id), []).append(cid)
+
+          def numeric_id(value):
+              if isinstance(value, int):
+                  return str(value)
+              if isinstance(value, str) and re.fullmatch(r"\d{4,12}", value.strip()):
+                  return value.strip()
+              return None
+
+          def collect_card_values(value, qa_id):
+              if isinstance(value, list):
+                  for item in value:
+                      collect_card_values(item, qa_id)
+                  return
+              if isinstance(value, dict):
+                  # Common card object shapes: {id: ...}, {card_id: ...}, {konami_id: ...}
+                  for k, v in value.items():
+                      lk = str(k).lower()
+                      if lk in {"id", "card_id", "cardid", "konami_id", "konamiid", "card_database_id"}:
+                          nid = numeric_id(v)
+                          if nid:
+                              add(nid, qa_id)
+                      elif "card" in lk:
+                          collect_card_values(v, qa_id)
+                  return
+              nid = numeric_id(value)
+              if nid:
+                  add(nid, qa_id)
+
+          for path in sorted(ROOT.glob("*.json")):
+              if path.name.startswith("."):
+                  continue
+              qa_id = path.stem
+              if not qa_id.isdigit():
+                  continue
+              qa_count += 1
+              try:
+                  obj = json.loads(path.read_text(encoding="utf-8"))
+              except Exception:
+                  continue
+
+              def walk(node):
+                  if isinstance(node, dict):
+                      for k, v in node.items():
+                          lk = str(k).lower()
+                          if "card" in lk:
+                              collect_card_values(v, qa_id)
+                          walk(v)
+                  elif isinstance(node, list):
+                      for v in node:
+                          walk(v)
+
+              walk(obj)
+
+          for cid in card_to_qa:
+              card_to_qa[cid] = sorted(set(card_to_qa[cid]), key=lambda x: int(x))
+          for qid in qa_to_cards:
+              qa_to_cards[qid] = sorted(set(qa_to_cards[qid]), key=lambda x: int(x))
+
+          (OUT / "card-to-qa.json").write_text(
+              json.dumps(card_to_qa, ensure_ascii=False, separators=(",", ":")),
+              encoding="utf-8"
+          )
+          (OUT / "qa-to-card.json").write_text(
+              json.dumps(qa_to_cards, ensure_ascii=False, separators=(",", ":")),
+              encoding="utf-8"
+          )
+          (OUT / "metadata.json").write_text(
+              json.dumps({
+                  "source": "https://github.com/db-ygoresources-com/yugioh-qa-history",
+                  "qa_files_scanned": qa_count,
+                  "cards_indexed": len(card_to_qa),
+                  "qa_records_indexed": len(qa_to_cards)
+              }, indent=2),
+              encoding="utf-8"
+          )
+          print(f"Scanned {qa_count} Q&A files; indexed {len(card_to_qa)} cards and {len(qa_to_cards)} Q&A records.")
+
+      - name: Record upstream revision
+        shell: bash
+        run: |
+          UPSTREAM_SHA="$(git -C /tmp/yugioh-qa-history rev-parse HEAD)"
+          UPSTREAM_DATE="$(git -C /tmp/yugioh-qa-history log -1 --format=%cI)"
+          cat > data/rulings/upstream.json <<EOF
+          {
+            "database": "MEIOCG YGOResources Q&A History",
+            "upstream": "https://github.com/db-ygoresources-com/yugioh-qa-history",
+            "branch": "main",
+            "upstream_commit": "$UPSTREAM_SHA",
+            "upstream_commit_date": "$UPSTREAM_DATE",
+            "synced_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+      - name: Commit only when the parent database changed
+        run: |
+          git config user.name "MEIOCG Database Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/rulings/
+          if git diff --cached --quiet; then
+            echo "Parent Q&A database is already current."
+          else
+            git commit -m "Sync YGOResources Q&A database"
+            git push
+          fi
